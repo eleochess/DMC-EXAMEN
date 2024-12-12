@@ -2,7 +2,7 @@ import streamlit as st
 from langchain.chat_models import ChatOpenAI
 from PIL import Image
 
-st.set_page_config(page_title = pollo, page_icon = "https://python.langchain.com/img/favicon.ico")
+st.set_page_config(page_title = "Chatbot usando Langchain, OpenAI y Streamlit", page_icon = "https://python.langchain.com/img/favicon.ico")
 
 # Procesamiento de particion y vectorizacion dle documento XXX
 # Cargarlo a base de datos vectorial

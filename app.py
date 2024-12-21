@@ -1,13 +1,67 @@
+# Imports
 import streamlit as st
 from langchain.chat_models import ChatOpenAI
-from PIL import Image
+from langchain.text_splitter import CharacterTextSplitter
+from langchain.document_loaders import PyPDFLoader
+from langchain.text_splitter import CharacterTextSplitter
+from langchain.vectorstores import FAISS
+from langchain.embeddings.sentence_transformer import SentenceTransformerEmbeddings
+from langchain.chains import RetrievalQA
+from langchain.prompts import PromptTemplate
 
-st.set_page_config(page_title = "Chatbot usando Langchain, OpenAI y Streamlit", page_icon = "https://python.langchain.com/img/favicon.ico")
+# Extrayendo secrets
+api_key_openai = st.secrets["API_KEY_OPENAI"]
 
-# Procesamiento de particion y vectorizacion dle documento XXX
-# Cargarlo a base de datos vectorial
+# Cargando PDF sobre "Bases de la investigación científica"
+loader = PyPDFLoader("BasesdelaInvestigacinCientfica.pdf")
+data = loader.load()
 
-# CLAVE API KEY DEBE ESTAR EN LOS SECRETS
+# Dividiendo texto de PDF en fragmentos (Chunks)
+text_splitter = CharacterTextSplitter.from_tiktoken_encoder(
+    chunk_size = 600, 
+    chunk_overlap = 100
+)
+docs = text_splitter.split_documents(documents = data)
+
+# Definiendo método de embeddings
+embedding_function = SentenceTransformerEmbeddings(model_name = "all-MiniLM-L6-v2")
+
+# Utilizando base de datos vectoria FAISS en memoria
+faiss_index = FAISS.from_documents(docs, embedding_function)
+
+# Definiendo template de la pregunta
+template = """Responda a la pregunta basada en el siguiente contexto.
+Si no puedes responder a la pregunta, usa la siguiente respuesta "No lo sé disculpa, puedes buscar la información en internet."
+
+Contexto: 
+{context}
+Pregunta: {question}
+Respuesta: 
+"""
+
+prompt = PromptTemplate(
+    template = template, input_variables = ["context", "question"]
+)
+
+# Estableciendo modelo LLM a utilizar
+llm = ChatOpenAI(
+    openai_api_key = api_key_openai,
+    model_name = 'gpt-3.5-turbo',
+    temperature = 0.0
+)
+
+qa = RetrievalQA.from_chain_type(
+    llm = llm, 
+    chain_type = "stuff", 
+    retriever = faiss_index.as_retriever(), #Por defecto recupera los 4 documentos más relevantes as_retriever(search_kwargs={'k': 3 })
+    chain_type_kwargs = {"prompt": prompt, "verbose": True},
+    verbose = True
+)
+
+st.set_page_config(
+    page_title = "Examen DMC - LMDCBV",
+    page_icon = "./favicon.ico"
+)
 
 with st.sidebar:
 
@@ -22,44 +76,37 @@ with st.sidebar:
         key = "model"
     )
 
-    image = Image.open('logos.png')
-    st.image(image, caption = 'OpenAI, Langchain y Streamlit')
+    # image = Image.open('logos.png')
+    # st.image(image, caption = 'OpenAI, Langchain y Streamlit')
 
-    st.markdown(
-        """
-        Integrando OpenAI con Streamlit y Langchain.
-    """
-    )
+    # st.markdown(
+    #     """
+    #     Integrando OpenAI con Streamlit y Langchain.
+    # """
+    # )
 
-def clear_chat_history():
-    st.session_state.messages = [{"role" : "assistant", "content": msg_chatbot}]
+# def clear_chat_history():
+#     st.session_state.messages = [{"role" : "assistant", "content": msg_chatbot}]
 
-openai_api_key = st.sidebar.text_input("Ingrese tu API Key de OpenAI y dale Enter para habilitar el chatbot", key = "chatbot_api_key", type = "password")
-st.sidebar.button('Limpiar historial de chat', on_click = clear_chat_history)
+# st.sidebar.button('Limpiar historial de chat', on_click = clear_chat_history)
+
+
+
+# st.write(qa.run("¿Cuales son los Tipos de conocimientos?"))
 
 msg_chatbot = """
         Soy un chatbot que está integrado a la API de OpenAI: 
 
         ### Preguntas frecuentes
         
-        - ¿Quién eres?
-        - ¿Cómo funcionas?
-        - ¿Cuál es tu capacidad o límite de conocimientos?
-        - ¿Puedes ayudarme con mi tarea/trabajo/estudio?
-        - ¿Tienes emociones o conciencia?
-        - Lo que desees
+        - ¿Cuales son los Tipos de conocimientos?
 """
+
+
 
 ## Se envía el prompt de usuario al modelo de GPT-3.5-Turbo para que devuelva una respuesta
 def get_response_openai(prompt, model):
-    
-    llm = ChatOpenAI(
-        openai_api_key = openai_api_key,
-        model_name = model,
-        temperature = 0
-    )
-
-    return llm.predict(prompt)
+    return qa.run(prompt)
 
 #Si no existe la variable messages, se crea la variable y se muestra por defecto el mensaje de bienvenida al chatbot.
 if "messages" not in st.session_state.keys():
@@ -70,7 +117,7 @@ for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.write(message["content"])
 
-if openai_api_key:
+if api_key_openai:
 
   prompt = st.chat_input("Ingresa tu pregunta")
   if prompt:

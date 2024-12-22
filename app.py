@@ -9,6 +9,39 @@ from langchain.embeddings.sentence_transformer import SentenceTransformerEmbeddi
 from langchain.chains import RetrievalQA
 from langchain.prompts import PromptTemplate
 
+# Título e ícono de la página
+st.set_page_config(
+    page_title = "Examen DMC - LMDCBV",
+    page_icon = "./favicon.ico"
+)
+
+st.header("Examen DMC ✍️")
+st.subheader("Leonardo M. Del Carpio Bellido V.")
+st.link_button("Fuente de conocimiento del bot", url="https://www.researchgate.net/publication/321034417_Bases_de_la_Investigacion_Cientifica")
+st.divider()
+
+# st.subheader("Fuente de conocimiento del bot: https://www.researchgate.net/publication/321034417_Bases_de_la_Investigacion_Cientifica", )
+
+# Diseño de la barra lateral izquierda
+with st.sidebar:
+
+    st.title("Parámetros del modelo")
+
+    model = st.selectbox('Eliga el modelo',
+        (
+            'gpt-3.5-turbo', 
+            'gpt-3.5-turbo-16k', 
+            'gpt-4'
+        ), 
+        key = "model"
+    )
+
+    temper = st.slider("Elije la temperatura", 0.0, 2.0, 0.5)
+
+    max_tokens = st.slider("Elije el máximo de tokens", 5, 250, 50)
+
+    st.text("*Mi API Key de Open AI está en los Secrets. Por favor no abusar 🙏*")
+
 # Extrayendo secrets
 api_key_openai = st.secrets["API_KEY_OPENAI"]
 
@@ -26,12 +59,12 @@ docs = text_splitter.split_documents(documents = data)
 # Definiendo método de embeddings
 embedding_function = SentenceTransformerEmbeddings(model_name = "all-MiniLM-L6-v2")
 
-# Utilizando base de datos vectoria FAISS en memoria
+# Utilizando base de datos vectorial FAISS en memoria
 faiss_index = FAISS.from_documents(docs, embedding_function)
 
-# Definiendo template de la pregunta
+# Definiendo plantilla (template) y petición (prompt)
 template = """Responda a la pregunta basada en el siguiente contexto.
-Si no puedes responder a la pregunta, usa la siguiente respuesta "No lo sé disculpa, puedes buscar la información en internet."
+Si no puedes responder a la pregunta, usa la siguiente respuesta "Ignoro, papito lindo. Usa tu google nomás."
 
 Contexto: 
 {context}
@@ -43,69 +76,36 @@ prompt = PromptTemplate(
     template = template, input_variables = ["context", "question"]
 )
 
-# Estableciendo modelo LLM a utilizar
+# Instanciando cadena de preguntas y respuestas
 llm = ChatOpenAI(
     openai_api_key = api_key_openai,
-    model_name = 'gpt-3.5-turbo',
-    temperature = 0.0
+    model_name = model,
+    temperature = temper,
+    max_tokens = max_tokens
 )
 
+# Estableciendo medio de preguntas y respuestas
 qa = RetrievalQA.from_chain_type(
     llm = llm, 
     chain_type = "stuff", 
-    retriever = faiss_index.as_retriever(), #Por defecto recupera los 4 documentos más relevantes as_retriever(search_kwargs={'k': 3 })
+    retriever = faiss_index.as_retriever(),
     chain_type_kwargs = {"prompt": prompt, "verbose": True},
     verbose = True
 )
 
-st.set_page_config(
-    page_title = "Examen DMC - LMDCBV",
-    page_icon = "./favicon.ico"
-)
-
-with st.sidebar:
-
-    st.title("Usando la API de OpenAI con Streamlit y Langchain")
-
-    model = st.selectbox('Eliga el modelo',
-        (
-            'gpt-3.5-turbo', 
-            'gpt-3.5-turbo-16k', 
-            'gpt-4'
-        ), 
-        key = "model"
-    )
-
-    # image = Image.open('logos.png')
-    # st.image(image, caption = 'OpenAI, Langchain y Streamlit')
-
-    # st.markdown(
-    #     """
-    #     Integrando OpenAI con Streamlit y Langchain.
-    # """
-    # )
-
-# def clear_chat_history():
-#     st.session_state.messages = [{"role" : "assistant", "content": msg_chatbot}]
-
-# st.sidebar.button('Limpiar historial de chat', on_click = clear_chat_history)
-
-
-
-# st.write(qa.run("¿Cuales son los Tipos de conocimientos?"))
-
 msg_chatbot = """
-        Soy un chatbot que está integrado a la API de OpenAI: 
+        ¡Hola! Soy un chatbot integrado en OpenAI y respondo preguntas sobre la teoría del conocimiento científico:
 
-        ### Preguntas frecuentes
+        #### Preguntas sugeridas:
         
-        - ¿Cuales son los Tipos de conocimientos?
+        - ¿Qué es el conocimiento científico?
+        - ¿Cuales son los tipos de conocimiento?
+        - ¿Cuáles son las características de la ciencia?
+        - ¿Cuáles son los tipos de ciencia?
 """
 
-
-
 ## Se envía el prompt de usuario al modelo de GPT-3.5-Turbo para que devuelva una respuesta
-def get_response_openai(prompt, model):
+def get_response_openai(prompt):
     return qa.run(prompt)
 
 #Si no existe la variable messages, se crea la variable y se muestra por defecto el mensaje de bienvenida al chatbot.
@@ -130,7 +130,7 @@ if api_key_openai:
       with st.chat_message("assistant"):
           with st.spinner("Esperando respuesta, dame unos segundos."):
               
-              response = get_response_openai(prompt, model)
+              response = get_response_openai(prompt)
               placeholder = st.empty()
               full_response = ''
               
